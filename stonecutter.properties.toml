@@ -1,0 +1,105 @@
+mod.id = "synchronize"
+mod.name = "Synchronize"
+mod.group = "net.ptah.synchronize"
+mod.version = "1.0.0-beta.1"
+
+deps.fabric_loader = "0.19.5"
+loomx.loom_version = "1.18-SNAPSHOT"
+
+[fabric."1.19.2"]
+mod.mc_compat = ">=1.19 <=1.19.2"
+mod.mc_releases = ["1.19", "1.19.1", "1.19.2"]
+deps.yarn = "1.19.2+build.28"
+deps.fabric_api = "0.77.0+1.19.2"
+deps.cloth_config = "8.3.134"
+
+[fabric."1.19.3"]
+mod.mc_compat = "1.19.3"
+mod.mc_releases = ["1.19.3"]
+deps.yarn = "1.19.3+build.5"
+deps.fabric_api = "0.76.1+1.19.3"
+deps.cloth_config = "9.1.104"
+
+[fabric."1.19.4"]
+mod.mc_compat = "1.19.4"
+mod.mc_releases = ["1.19.4"]
+deps.yarn = "1.19.4+build.2"
+deps.fabric_api = "0.87.2+1.19.4"
+deps.cloth_config = "10.1.135"
+
+[fabric."1.20.1"]
+mod.mc_compat = ">=1.20 <=1.20.1"
+mod.mc_releases = ["1.20", "1.20.1"]
+deps.yarn = "1.20.1+build.10"
+deps.fabric_api = "0.92.12+1.20.1"
+deps.cloth_config = "11.1.118"
+
+[fabric."1.20.2"]
+mod.mc_compat = "1.20.2"
+mod.mc_releases = ["1.20.2"]
+deps.yarn = "1.20.2+build.4"
+deps.fabric_api = "0.91.6+1.20.2"
+deps.cloth_config = "12.0.137"
+
+[fabric."1.20.4"]
+mod.mc_compat = ">=1.20.3 <=1.20.4"
+mod.mc_releases = ["1.20.3", "1.20.4"]
+deps.yarn = "1.20.4+build.3"
+deps.fabric_api = "0.97.3+1.20.4"
+deps.cloth_config = "13.0.138"
+
+[fabric."1.20.6"]
+mod.mc_compat = ">=1.20.5 <=1.20.6"
+mod.mc_releases = ["1.20.5", "1.20.6"]
+deps.yarn = "1.20.6+build.3"
+deps.fabric_api = "0.100.8+1.20.6"
+deps.cloth_config = "14.0.139"
+
+[fabric."1.21.1"]
+mod.mc_compat = ">=1.21 <=1.21.1"
+mod.mc_releases = ["1.21", "1.21.1"]
+deps.yarn = "1.21.1+build.3"
+deps.fabric_api = "0.116.17+1.21.1"
+deps.cloth_config = "15.0.140"
+
+[fabric."1.21.3"]
+mod.mc_compat = ">=1.21.2 <=1.21.3"
+mod.mc_releases = ["1.21.2", "1.21.3"]
+deps.yarn = "1.21.3+build.2"
+deps.fabric_api = "0.114.1+1.21.3"
+deps.cloth_config = "16.0.143"
+
+[fabric."1.21.4"]
+mod.mc_compat = "1.21.4"
+mod.mc_releases = ["1.21.4"]
+deps.yarn = "1.21.4+build.8"
+deps.fabric_api = "0.119.4+1.21.4"
+deps.cloth_config = "17.0.144"
+
+[fabric."1.21.5"]
+mod.mc_compat = "1.21.5"
+mod.mc_releases = ["1.21.5"]
+deps.yarn = "1.21.5+build.1"
+deps.fabric_api = "0.128.2+1.21.5"
+deps.cloth_config = "18.0.145"
+
+[fabric."1.21.8"]
+mod.mc_compat = ">=1.21.6 <=1.21.8"
+mod.mc_releases = ["1.21.6", "1.21.7", "1.21.8"]
+deps.yarn = "1.21.8+build.1"
+deps.fabric_api = "0.136.1+1.21.8"
+deps.cloth_config = "19.0.147"
+
+[fabric."1.21.10"]
+mod.mc_compat = ">=1.21.9 <=1.21.10"
+mod.mc_releases = ["1.21.9", "1.21.10"]
+deps.yarn = "1.21.10+build.3"
+deps.fabric_api = "0.138.4+1.21.10"
+deps.cloth_config = "20.0.149"
+
+[fabric."1.21.11"]
+mod.mc_compat = "1.21.11"
+mod.mc_releases = ["1.21.11"]
+deps.yarn = "1.21.11+build.6"
+deps.fabric_api = "0.141.6+1.21.11"
+deps.cloth_config = "21.11.153"

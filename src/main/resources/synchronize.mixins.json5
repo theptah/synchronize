@@ -1,0 +1,18 @@
+{
+	"required": true,
+	"package": "net.ptah.synchronize.mixin",
+	"compatibilityLevel": "${java}",
+	"mixins": [
+		"ServerLoginNetworkHandlerMixin",
+		"PlayerManagerLimboJoinMixin",
+		"ServerPlayNetworkHandlerLimboChunkMixin",
+		"ServerPlayNetworkHandlerLimboFreezeMixin",
+		"ItemEntityLimboCollisionMixin",
+		"EntityLimboMovementMixin",
+		"ServerPlayerEntityLimboDamageMixin"
+	],
+	"client": [],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

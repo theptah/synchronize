@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "${id}",
+  "version": "${version}",
+  "name": "${name}",
+  "description": "Advanced Synchronize system for syncing files & mods which requires restart between server and client.",
+  "authors": ["ptah"],
+  "license": "MIT",
+  "environment": "*",
+  "contact": {
+    "sources": "https://github.com/theptah/synchronize",
+    "issues": "https://github.com/theptah/synchronize/issues",
+    "homepage": "https://modrinth.com/user/ptah"
+  },
+  "accessWidener": "synchronize.accesswidener",
+  "entrypoints": {
+    "preLaunch": [
+      "net.ptah.synchronize.CommonPreLaunch"
+    ],
+    "main": [
+      "net.ptah.synchronize.Synchronize"
+    ],
+    "client": [
+      "net.ptah.synchronize.client.SynchronizeClient"
+    ]
+  },
+  "mixins": [
+    "synchronize.mixins.json",
+    {
+      "config": "synchronize.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "${minecraft}",
+    "java": ">=${java}",
+    "fabric-api": "*",
+    "cloth-config": "*"
+  }
+}
