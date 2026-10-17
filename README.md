@@ -18,14 +18,60 @@ You can show your support for my development efforts by using this mod and if yo
 </a>
 
 
+## Preview
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <a href="/preview-3.gif" alt="Click to see" target="_blank">
+        <img src="https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-3.gif" alt="Synchronization Screen Preview" width="100%" />
+      </a>
+      <br />
+      <b>Synchronization</b>
+      <br />
+      <sub>Synchronization progress</sub>
+    </td>    
+	<td align="center">
+      <a href="/preview.gif" alt="Click to see" target="_blank">
+        <img src="https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview.gif" alt="Untrusted Server Preview" width="100%" />
+      </a>
+      <br />
+      <b>Untrusted Server</b>
+      <br />
+      <sub>When server uses unofficial jar</sub>
+    </td>
+    <td align="center">
+      <a href="/preview-2.gif" alt="Click to see" target="_blank">
+        <img src="https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-2.gif" alt="Untrusted Client Preview" width="100%" />
+      </a>
+      <br />
+      <b>Untrusted Client</b>
+      <br />
+      <sub>When client uses different jar from server that is unofficial</sub>
+    </td>
+  </tr>
+</table> 
+
 ## Supported Versions
 
-For now, it only supports the **Fabric** loader but in the future, **depending on your feedback**, I may add support for other loaders.
+- For now, it only supports the **Fabric** loader but in the future, **depending on your feedback**, I may add support for other loaders.
 
-| Minecraft 		| Java	|
-| --- 				| ---	|
-| 1.19.x – 1.20.4 	| 17+	|
-| 1.20.5 – 1.21.11 	| 21+	|
+| JAR File | Supported Versions |
+| :--- | :--- | 
+| `1.19.2` | 1.19, 1.19.1, 1.19.2 | 
+| `1.19.3` | 1.19.3 | 
+| `1.19.4` | 1.19.4 | 
+| `1.20.1` | 1.20, 1.20.1 | 
+| `1.20.2` | 1.20.2 | 
+| `1.20.4` | 1.20.3, 1.20.4 | 
+| `1.20.6` | 1.20.5, 1.20.6 | 
+| `1.21.1` | 1.21, 1.21.1 | 
+| `1.21.3` | 1.21.2, 1.21.3 | 
+| `1.21.4` | 1.21.4 | 
+| `1.21.5` | 1.21.5 | 
+| `1.21.8` | 1.21.6, 1.21.7, 1.21.8 | 
+| `1.21.10` | 1.21.9, 1.21.10 | 
+| `1.21.11` | 1.21.11 | 
 
 Requires [Fabric API](https://modrinth.com/mod/fabric-api). 
 
@@ -79,24 +125,24 @@ synchronize remove_files mods/example.jar
 synchronize refresh
 ```
  
-### Updating and Removing Shared Files
+### Managing Shared Files
 
-**To update an existing tracked file:**
+**To update an existing tracked files:**
 
 1. Replace or edit the file on the server.
 2. Run `synchronize refresh`.
 3. Players receive the updated file during their next synchronization.
 
-**To stop distributing a file without requesting its removal from clients:**
-
-Run `synchronize remove_files <path>`. This unregisters the file but does not delete it from either side.
-
-**To offer removal of a previously distributed file:**
+**To request deleting a previously distributed file from clients:**
 
 1. Just delete its tracked source file from the server.
 2. Run `synchronize refresh` while the file is still registered.
 3. Synchronize moves its client destination to the deleted-file list.
 4. Players are shown a removal prompt when connecting.
+
+**To stop distributing a file without requesting its removal from clients:**
+
+Run `synchronize remove_files <path>`. This unregisters the file but does not delete it from either side.
 
 ## Configuration
 
@@ -151,6 +197,10 @@ The handshake provides a user-approved fallback when normal verification cannot 
 The client and server must prove that they know the same code.
 
 > **REMEMBER!** A successful handshake does not prove that either JAR is an official GitHub release. Only use this fallback with a server owner you trust, and keep the code private.
+
+Preview
+
+![Handshake Edit Preview](https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-4.gif)
 
 ## Build Guide
 
