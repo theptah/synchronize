@@ -9,6 +9,9 @@
 )
 
 A feature-rich synchronization mod that **automatically installs** and syncs mods and various assets when the client closes, while also utilizing **Limbo mode** to let vanilla players join and receive interactive chat prompts to download the required files. **All currently compiled Minecraft versions will receive future updates.**
+
+**REMEMBER!** Synchronize is currently in **Beta**. Bugs and unexpected behavior may occur. Back up your files before use and report any issues you encounter.
+**Use only official JARs published Modrinth and GitHub Releases page** on both the server and client. 
 <br/>
 <br/>
 You can show your support for my development efforts by using this mod and if you’d like to treat me to a snack or drink while i'm working on this, you can make a donation:
