@@ -76,8 +76,6 @@ You can show your support for my development efforts by using this mod and if yo
 | `1.21.10` | 1.21.9, 1.21.10 | 
 | `1.21.11` | 1.21.11 | 
 
-Requires [Fabric API](https://modrinth.com/mod/fabric-api). 
-
 ## Download
 
 - [Modrinth](https://modrinth.com/mod/synchronize)
