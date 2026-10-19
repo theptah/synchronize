@@ -237,6 +237,10 @@ Run `synchronize remove_files <path>`. This unregisters the file but does not de
 - `rateLimitWindowSeconds`: Duration of the rolling time window, in seconds. Accepted requests count toward the limit until they fall outside this window.
 - `handshake`: If the request to verify whether the client is using the official version via GitHub returns an error, the code provided by the server owner in this field is used to force access to the server.
 
+Preview of Vanilla Client in Limbo Mode:
+
+![Limbo Mode Preview](https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-6.gif)
+
 ## Build Guide
 
 > **INFO:** Any missing JDK toolchains are downloaded automatically by Gradle. A compatible Java installation is still required to launch Gradle. Collected artifacts are saved to `./build/libs/` as `synchronize-{mod_version}-{game_version}-{loader}.jar`.
