@@ -17,6 +17,7 @@ public class ModConfig implements ConfigData {
     public int rateLimitMaxRequests;
     public int rateLimitWindowSeconds;
     public String handshake;
+    public String additionalSharedDirectories;
 
     public ModConfig() {
         this.language = "en_us";
@@ -31,6 +32,7 @@ public class ModConfig implements ConfigData {
         this.rateLimitMaxRequests = 5;
         this.rateLimitWindowSeconds = 60;
         this.handshake = "";
+        this.additionalSharedDirectories = "";
     }
 
     public static enum TransferMethod {

@@ -12,6 +12,7 @@
 		//? if >=1.21.4
 		/*"client.ClientRegistrySyncHandlerMixin",*/
 		"client.AddServerScreenMixin",
+		"client.MultiplayerProfileMixin",
 		"client.ClientLoginNetworkHandlerAccessor",
 		"client.ClientLoginDisconnectMixin",
 		"client.ServerInfoMixin"

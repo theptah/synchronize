@@ -23,6 +23,10 @@ public final class ConfigMigration {
         move(configDir.resolve(Synchronize.MOD_ID + ".json"), modDir.resolve("config.json"));
         move(modDir.resolve("file_tree.json"), modDir.resolve(FileRegistry.SYNC_LIST_FILE_NAME));
         renameHandshakeKey(modDir.resolve("config.json"));
+        try {
+            StorageLayout.migrateSharedDirectories(modDir);
+            StorageLayout.migrateTemporaryDirectories(modDir);
+        } catch (java.io.IOException e) { throw new IllegalStateException("Cannot migrate Synchronize storage", e); }
     }
 
     private static void renameHandshakeKey(Path configFile) {

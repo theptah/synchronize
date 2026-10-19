@@ -1,6 +1,7 @@
 package net.ptah.synchronize.client;
 
 import net.ptah.synchronize.Synchronize;
+import net.ptah.synchronize.client.profile.ProfileManager;
 import net.ptah.synchronize.client.screen.DownloadProgressScreen;
 import net.ptah.synchronize.config.FileRegistry;
 import net.ptah.synchronize.config.FileRegistry.FileEntry;
@@ -26,12 +27,17 @@ import net.minecraft.text.Text;
 
 public class ClientExternalDownloader {
     public static void startDownload(String serverIp, String sessionId, byte[] aesKey, int port, List<String> filePaths, DownloadProgressScreen progressScreen, Runnable onComplete) {
+        final String ticket;
+        try { ticket = ProfileManager.ticket(); }
+        catch (java.io.IOException e) { progressScreen.addError(String.valueOf(e.getMessage())); progressScreen.setPreparationFailed(); return; }
+        final var entries = ClientSyncHandler.getActiveSyncEntries();
         new Thread(() -> {
             try {
                 int totalFiles = filePaths.size();
                 int currentFileIndex = 0;
 
                 for (String path : filePaths) {
+                    ProfileManager.requireTicket(ticket);
                     ++currentFileIndex;
                     String safePath = path.replace('\\', '/');
 
@@ -39,7 +45,7 @@ public class ClientExternalDownloader {
                         throw new RuntimeException("Security violation: Invalid path " + safePath);
                     }
 
-                    FileEntry entry = ClientSyncHandler.getActiveSyncEntries().get(safePath);
+                    FileEntry entry = entries.get(safePath);
                     if (entry == null) {
                         throw new RuntimeException("Security Error: File not in active sync list: " + safePath);
                     }
@@ -62,7 +68,24 @@ public class ClientExternalDownloader {
                     if (responseCode == 200) {
                         Path targetPath = PathSecurity.resolveUnder(ClientSyncHandler.getTempDir().toPath(), safePath);
                         File targetFile = targetPath.toFile();
-                        try (InputStream is = connection.getInputStream()) {
+                        try (InputStream is = new java.io.FilterInputStream(connection.getInputStream()) {
+                            private long received;
+                            @Override
+                            public int read(byte[] bytes, int off, int len) throws java.io.IOException {
+                                ProfileManager.requireTicket(ticket);
+                                int n = super.read(bytes, off, len);
+                                if (n > 0) {
+                                    received += n;
+                                    if (received > ProfileManager.MAX_FILE_BYTES + 28) throw new java.io.IOException("File exceeds 512 MiB profile limit");
+                                    ProfileManager.receive(n);
+                                }
+                                return n;
+                            }
+                            @Override
+                            public int read() throws java.io.IOException {
+                                byte[] single = new byte[1]; int n = read(single, 0, 1); return n < 0 ? -1 : single[0] & 255;
+                            }
+                        }) {
                             byte[] iv = new byte[12];
                             int offset = 0;
                             while (offset < iv.length) {
@@ -89,6 +112,7 @@ public class ClientExternalDownloader {
                             Files.deleteIfExists(targetFile.toPath());
                             throw new SecurityException("Hash mismatch for " + safePath);
                         }
+                        ProfileManager.requireTicket(ticket);
                         ClientSyncHandler.markDownloaded(safePath);
 
                         final int finalCurrentFileIndex = currentFileIndex;
@@ -107,6 +131,7 @@ public class ClientExternalDownloader {
                             float overallProgress = (float) finalCurrentFileIndex / (float) totalFiles;
                             progressScreen.updateProgress(overallProgress, Text.translatable("synchronize.progress.receiving", finalCurrentFileIndex, totalFiles, fileName));
                         });
+                        throw new java.io.IOException("Required profile download missing: " + safePath);
                     } else {
                         Synchronize.LOGGER.error("Failed to download file: {} (HTTP {})", safePath, responseCode);
                         final int code = responseCode;
@@ -115,13 +140,21 @@ public class ClientExternalDownloader {
                     }
                 }
 
-                MinecraftClient.getInstance().execute(() -> progressScreen.setNetworkFinished(() ->
-                    ClientSyncHandler.startApplying(filePaths, progressScreen, onComplete)
-                ));
+                ProfileManager.requireTicket(ticket);
+                MinecraftClient.getInstance().execute(() -> {
+                    try {
+                        ProfileManager.requireTicket(ticket);
+                        progressScreen.setNetworkFinished(() -> ClientSyncHandler.startApplying(filePaths, progressScreen, onComplete));
+                    } catch (java.io.IOException e) { progressScreen.setPreparationFailed(); }
+                });
 
             } catch (Exception e) {
+                try { ProfileManager.requireTicket(ticket); } catch (java.io.IOException ignored) { return; }
                 Synchronize.LOGGER.error("External download sequence failed", e);
                 MinecraftClient.getInstance().execute(() -> {
+                    try { ProfileManager.requireTicket(ticket); } catch (java.io.IOException ignored) { return; }
+                    progressScreen.addError(String.valueOf(e.getMessage()));
+                    progressScreen.setPreparationFailed();
                     if (MinecraftClient.getInstance().getNetworkHandler() != null) {
                         MinecraftClient.getInstance().getNetworkHandler().getConnection().disconnect(Text.translatable("synchronize.disconnect.download_failed", String.valueOf(e.getMessage())));
                     }

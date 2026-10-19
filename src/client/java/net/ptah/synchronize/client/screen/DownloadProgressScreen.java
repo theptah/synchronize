@@ -49,6 +49,7 @@ public class DownloadProgressScreen extends SynchronizeScreen {
 	private Runnable onApplyAction;
 	private final Runnable onAbortAction;
 	private Runnable onContinueAction;
+	private Runnable onProfileSwitch;
 
 	private boolean showImage;
 	private int imageY;
@@ -128,7 +129,8 @@ public class DownloadProgressScreen extends SynchronizeScreen {
 				}
 			} else if (this.currentState == State.DONE) {
 				if (this.requiresRestart) {
-					MinecraftClient.getInstance().scheduleStop();
+					if (this.onProfileSwitch != null) this.onProfileSwitch.run();
+                    else MinecraftClient.getInstance().scheduleStop();
 				} else {
 					if (this.onContinueAction != null) {
 						this.onContinueAction.run();
@@ -168,7 +170,7 @@ public class DownloadProgressScreen extends SynchronizeScreen {
 		this.progress = 1.0F;
 		this.requiresRestart = requiresRestart;
 		if (requiresRestart) {
-			this.statusText = this.hasMissingFiles
+			this.statusText = this.onProfileSwitch != null ? Text.translatable("synchronize.profiles.prepared") : this.hasMissingFiles
 				? Text.translatable("synchronize.download.restart_required_missing")
 				: Text.translatable("synchronize.download.restart_required");
 		} else if (this.hasMissingFiles) {
@@ -185,7 +187,7 @@ public class DownloadProgressScreen extends SynchronizeScreen {
 			switch (this.currentState) {
 				case DOWNLOADING -> this.actionButton.setMessage(Text.translatable("synchronize.button.exit"));
 				case APPLYING -> this.actionButton.setMessage(Text.translatable("synchronize.button.applying"));
-				case DONE -> this.actionButton.setMessage(Text.translatable(this.requiresRestart ? "synchronize.button.close_game" : "synchronize.button.join"));
+				case DONE -> this.actionButton.setMessage(Text.translatable(this.onProfileSwitch != null ? "synchronize.profiles.switch" : this.requiresRestart ? "synchronize.button.quit_game" : "synchronize.button.join"));
 			}
 		}
 	}
@@ -458,6 +460,14 @@ public class DownloadProgressScreen extends SynchronizeScreen {
 	public boolean shouldCloseOnEsc() {
 		return false;
 	}
+
+    public void setProfileSwitch(Runnable action) { this.onProfileSwitch = action; }
+
+    public void setPreparationFailed() {
+        this.currentState = State.DOWNLOADING;
+        this.hasMissingFiles = true;
+        this.updateButtonVisuals();
+    }
 
 	public void setOnContinueAction(Runnable action) {
 		this.onContinueAction = action;

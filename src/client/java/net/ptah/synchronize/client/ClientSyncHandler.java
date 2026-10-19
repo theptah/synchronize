@@ -1,6 +1,9 @@
 package net.ptah.synchronize.client;
 
 import net.ptah.synchronize.Synchronize;
+import net.ptah.synchronize.client.profile.ProfileManager;
+import net.ptah.synchronize.client.profile.ProfileStorage;
+import net.ptah.synchronize.client.screen.ProfileMessageScreen;
 import net.ptah.synchronize.client.screen.DownloadProgressScreen;
 import net.ptah.synchronize.client.screen.ModUpdateScreen;
 import net.ptah.synchronize.client.screen.DeletedFilesPromptScreen;
@@ -146,14 +149,6 @@ public class ClientSyncHandler {
                 || normalized.toLowerCase(Locale.ROOT).startsWith("mods/");
     }
 
-    private static boolean requiresRestartForEntry(String sourceKey) {
-        FileEntry entry = activeSyncEntries.get(sourceKey);
-        String destination = entry == null || entry.destination == null || entry.destination.isBlank()
-                ? sourceKey
-                : entry.destination;
-        return isModsDestination(destination) || (entry != null && entry.restart && !isModsDestination(destination));
-    }
-
     private static boolean targetsMainModJar(String destination, String hash) {
         if (hash != null && ModJar.isSelfHash(hash)) {
             return true;
@@ -171,7 +166,7 @@ public class ClientSyncHandler {
     }
 
     public static File getTempDir() {
-        return new File(FabricLoader.getInstance().getConfigDir().toFile(), "synchronize/temp");
+        return new File(FabricLoader.getInstance().getConfigDir().toFile(), "synchronize/temp/transfer");
     }
 
     private static void closeActiveChunkStreamQuietly() {
@@ -221,11 +216,6 @@ public class ClientSyncHandler {
         }
     }
 
-    private static String destinationFor(String sourceKey) {
-        FileEntry entry = activeSyncEntries.get(sourceKey);
-        return (entry != null && entry.destination != null && !entry.destination.isBlank()) ? entry.destination : sourceKey;
-    }
-
     public static void markDownloaded(String path) {
         downloadedFiles.add(path);
     }
@@ -249,6 +239,7 @@ public class ClientSyncHandler {
                 throw new SecurityException("Invalid sync hash");
             }
             try {
+                ProfileStorage.allow(gameDir, destination);
                 PathSecurity.resolveUnder(gameDir, destination);
                 PathSecurity.resolveUnder(getTempDir().toPath(), source);
             } catch (Exception ex) {
@@ -258,68 +249,33 @@ public class ClientSyncHandler {
     }
 
     public static void startApplying(List<String> filesToMove, DownloadProgressScreen screen, Runnable onComplete) {
-        boolean needsRestart = false;
-        for (String key : filesToMove) {
-            if (requiresRestartForEntry(key)) {
-                needsRestart = true;
-                break;
-            }
-        }
-
-        final boolean restartRequired = needsRestart;
-
+        final String ticket;
+        try { ticket = ProfileManager.ticket(); }
+        catch (Exception e) { screen.addError(String.valueOf(e.getMessage())); screen.setPreparationFailed(); return; }
         new Thread(() -> {
-            File tempDir = getTempDir();
-            File gameDir = MinecraftClient.getInstance().runDirectory;
-            int total = Math.max(1, filesToMove.size());
-            int current = 0;
-
-            for (String key : filesToMove) {
-                String destination = destinationFor(key);
-                try {
-                    Path sourcePath = PathSecurity.resolveUnder(tempDir.toPath(), key);
-                    if (Files.exists(sourcePath) && Files.isRegularFile(sourcePath) && !Files.isSymbolicLink(sourcePath)
-                            && ModJar.isSynchronizeJar(sourcePath)) {
-                        Files.deleteIfExists(sourcePath);
-                        Synchronize.LOGGER.warn("[Synchronize] Refusing to install a Synchronize jar through the sync list: {}", destination);
-                        final String finalDestination = destination;
-                        MinecraftClient.getInstance().execute(() -> screen.addError(I18n.translate("synchronize.log.main_mod_skipped", finalDestination)));
-                    } else if (Files.exists(sourcePath) && Files.isRegularFile(sourcePath) && !Files.isSymbolicLink(sourcePath)) {
-                        PathSecurity.resolveUnder(gameDir.toPath(), destination);
-                        if (requiresRestartForEntry(key)) {
-                            PendingUpdateManager.stage(sourcePath.toFile(), destination);
-                            final String finalDestination = destination;
-                            MinecraftClient.getInstance().execute(() -> screen.addLog(I18n.translate("synchronize.log.staged", finalDestination)));
-                        } else {
-                            Path dest = PathSecurity.resolveUnder(gameDir.toPath(), destination);
-                            Files.createDirectories(dest.getParent());
-                            Files.move(sourcePath, dest, StandardCopyOption.REPLACE_EXISTING);
-                            final String finalDestination = destination;
-                            MinecraftClient.getInstance().execute(() -> screen.addLog(I18n.translate("synchronize.log.applied", finalDestination)));
-                        }
-                    }
-                } catch (Exception e) {
-                    Synchronize.LOGGER.error("Error applying file {}", destination, e);
-                    final String finalDestination = destination;
-                    MinecraftClient.getInstance().execute(() -> screen.addError(I18n.translate("synchronize.log.apply_error", finalDestination)));
-                }
-                ++current;
-                final int currentCopy = current;
-                final String movingName = new File(destination).getName();
+            try {
+                String id = ProfileManager.prepare(filesToMove, ticket);
                 MinecraftClient.getInstance().execute(() -> {
-                    float prog = (float) currentCopy / (float) total;
-                    screen.updateProgress(prog, Text.translatable("synchronize.progress.moving", currentCopy, total, movingName));
+                    try { ProfileManager.requireTicket(ticket); } catch (Exception ignored) { return; }
+                    endSyncSession();
+                    screen.setProfileSwitch(() -> {
+                        try { ProfileManager.queue(id, true); }
+                        catch (Exception e) { screen.addError(String.valueOf(e.getMessage())); }
+                    });
+                    screen.setFullyDone(true);
+                    if (versionHandler != null) showVerificationScreen(versionHandler, screen, Text.translatable("synchronize.profiles.restart"));
+                });
+            } catch (Exception e) {
+                Synchronize.LOGGER.error("Failed to prepare server profile", e);
+                MinecraftClient.getInstance().execute(() -> {
+                    try { ProfileManager.requireTicket(ticket); } catch (Exception ignored) { return; }
+                    screen.addError(String.valueOf(e.getMessage()));
+                    screen.setPreparationFailed();
+                    endSyncSession();
+                    if (versionHandler != null) showVerificationScreen(versionHandler, screen, Text.translatable("synchronize.disconnect.download_failed", String.valueOf(e.getMessage())));
                 });
             }
-
-            clearTempFolder();
-            MinecraftClient.getInstance().execute(() -> {
-                screen.setFullyDone(restartRequired);
-                if (onComplete != null) {
-                    onComplete.run();
-                }
-            });
-        }, "Synchronize-Apply").start();
+        }, "Synchronize-PrepareProfile").start();
     }
 
     private static final class MissingFiles {
@@ -345,7 +301,9 @@ public class ClientSyncHandler {
                 Synchronize.LOGGER.warn("[Synchronize] Ignoring sync entry '{}' targeting the Synchronize main mod jar.", key);
                 continue;
             }
-            File localFile = new File(gameDir, destination);
+            File localFile;
+            try { localFile = ProfileManager.comparison(destination).toFile(); }
+            catch (Exception ex) { throw new SecurityException("Cannot inspect profile file", ex); }
             boolean missing;
 
             if (!localFile.exists()) {
@@ -381,7 +339,9 @@ public class ClientSyncHandler {
             String destination = entry.getKey().replace('\\', '/');
             if (!PathSecurity.isSafeRelativePath(destination)) throw new SecurityException("Invalid garbage path");
             try {
-                Path target = PathSecurity.resolveUnder(gameDir.toPath(), destination);
+                ProfileStorage.allow(gameDir.toPath(), destination);
+                if (!ProfileManager.owns(destination)) continue;
+                Path target = ProfileManager.comparison(destination);
                 if (Files.exists(target, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
                     if (targetsMainModJar(destination, null)) {
                         Synchronize.LOGGER.warn("[Synchronize] Ignoring removal request for the Synchronize main mod jar: {}", destination);
@@ -394,23 +354,6 @@ public class ClientSyncHandler {
             }
         }
         return existing;
-    }
-
-    private static void deleteFilesNow(List<String> destinations) {
-        File gameDir = MinecraftClient.getInstance().runDirectory;
-        for (String destination : destinations) {
-            try {
-                Path target = PathSecurity.resolveUnder(gameDir.toPath(), destination);
-                if (Files.isSymbolicLink(target)) {
-                    Synchronize.LOGGER.warn("Skipping symbolic link deletion: {}", destination);
-                    continue;
-                }
-                Files.deleteIfExists(target);
-                Synchronize.LOGGER.info("[Synchronize] Deleted server-removed file: {}", destination);
-            } catch (Exception e) {
-                Synchronize.LOGGER.error("Failed to delete server-removed file {}", destination, e);
-            }
-        }
     }
 
     private static void abortLogin(Text reason) {
@@ -442,18 +385,127 @@ public class ClientSyncHandler {
             return;
         }
 
+        ProfileManager.cancelDownload();
         clearTempFolder();
         showDisconnectedScreen(client);
     }
 
+    private static volatile ClientLoginNetworkHandler profilePromptHandler;
+
+    private static synchronized CompletableFuture<PacketByteBuf> profilePromptAsync(MinecraftClient client, ClientLoginNetworkHandler handler,
+            Map<String, FileEntry> entries, Map<String, Boolean> garbage, SyncPackets.ExternalPrompt external) {
+        if (profilePromptHandler == handler || versionHandler != handler) return CompletableFuture.completedFuture(responseBuf(false, List.of()));
+        profilePromptHandler = handler;
+        CompletableFuture<PacketByteBuf> result = new CompletableFuture<>();
+        new Thread(() -> {
+            try {
+                if (!handler.connection.isOpen()) { result.complete(responseBuf(false, List.of())); return; }
+                handleProfilePrompt(client, handler, entries, garbage, external).whenComplete((reply, error) -> {
+                    if (error != null) result.completeExceptionally(error); else result.complete(reply);
+                });
+            } catch (Exception e) {
+                Synchronize.LOGGER.error("Could not prepare profile session", e);
+                client.execute(() -> {
+                    if (versionHandler != handler) return;
+                    Screen back = new net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen(new net.minecraft.client.gui.screen.TitleScreen());
+                    showVerificationScreen(handler, new ProfileMessageScreen(back, Text.translatable("synchronize.profiles.error"), Text.literal(String.valueOf(e.getMessage())),
+                        Text.translatable("synchronize.profiles.back"), () -> client.setScreen(back), null, null), Text.translatable("synchronize.disconnect.invalid_manifest"));
+                });
+                result.complete(responseBuf(false, List.of()));
+            }
+        }, "Synchronize-InspectProfile").start();
+        return result;
+    }
+
+    private static CompletableFuture<PacketByteBuf> handleProfilePrompt(MinecraftClient client, ClientLoginNetworkHandler handler,
+            Map<String, FileEntry> entries, Map<String, Boolean> garbage, SyncPackets.ExternalPrompt external) throws Exception {
+        loginConnection = handler.connection;
+        ClientLoginNetworkHandlerAccessor accessor = (ClientLoginNetworkHandlerAccessor) handler;
+        //? if >=1.19.3 {
+        ServerInfo info = accessor.synchronize$getServerInfo();
+        //?} else
+        /*ServerInfo info = client.getCurrentServerEntry();*/
+        String fallback = handler.connection.getAddress().toString();
+        ProfileManager.begin(info, fallback, entries);
+        for (String path : garbage.keySet()) if (!PathSecurity.isSafeRelativePath(path)) throw new SecurityException("Invalid deletion path");
+        MissingFiles missing = getMissingFiles(entries);
+        Map<String, Boolean> existingGarbage = getExistingGarbage(garbage);
+        activeSyncEntries = entries;
+        activeRequestedFiles.clear(); downloadedFiles.clear();
+        CompletableFuture<PacketByteBuf> future = new CompletableFuture<>();
+        client.execute(() -> {
+            if (versionHandler != handler || !handler.connection.isOpen()) { future.complete(responseBuf(false, List.of())); return; }
+            Screen parent = accessor.synchronize$getParentScreen();
+            beginSyncSession(parent);
+            Runnable completedWithoutDownload = () -> {
+                try {
+                    ProfileManager.prepare(List.of(), ProfileManager.ticket());
+                    if (ProfileManager.mustSwitch()) showProfileReady(handler, parent, future);
+                    else {
+                        endSyncSession(); client.setScreen(parent); future.complete(responseBuf(true, List.of()));
+                    }
+                } catch (Exception e) {
+                    endSyncSession(); future.complete(responseBuf(false, List.of()));
+                    abortLogin(Text.translatable("synchronize.disconnect.download_failed", String.valueOf(e.getMessage())));
+                }
+            };
+            Runnable downloadPrompt = () -> {
+                if (missing.mandatory.isEmpty() && missing.optionalDisplayNames.isEmpty()) { completedWithoutDownload.run(); return; }
+                client.setScreen(new PromptScreen(parent, missing.mandatory, missing.optionalDisplayNames, requested -> {
+                    if (requested.isEmpty()) { completedWithoutDownload.run(); return; }
+                    activeRequestedFiles.clear(); activeRequestedFiles.addAll(requested);
+                    vanillaTotalFiles = Math.max(1, requested.size()); vanillaCompletedFiles.set(0); downloadedFiles.clear();
+                    activeProgressScreen = new DownloadProgressScreen(() -> {
+                        ProfileManager.cancelDownload(); endSyncSession(); clearTempFolder(); future.complete(responseBuf(false, List.of()));
+                        abortLogin(Text.translatable("synchronize.disconnect.aborted_by_user"));
+                    }, null);
+                    client.setScreen(activeProgressScreen);
+                    if (external == null) future.complete(responseBuf(true, requested));
+                    else ClientExternalDownloader.startDownload(resolveServerIp(handler), external.sessionId(), external.aesKey(), external.port(), requested, activeProgressScreen, () -> {});
+                }, () -> {
+                    endSyncSession(); future.complete(responseBuf(false, List.of()));
+                    abortLogin(Text.translatable("synchronize.disconnect.aborted_by_user")); client.setScreen(parent);
+                }));
+            };
+            if (existingGarbage.isEmpty()) downloadPrompt.run();
+            else client.setScreen(new DeletedFilesPromptScreen(parent, new ArrayList<>(existingGarbage.keySet()), true, paths -> {
+                try { ProfileManager.deleteOnSwitch(paths); downloadPrompt.run(); }
+                catch (Exception e) { future.complete(responseBuf(false, List.of())); abortLogin(Text.translatable("synchronize.disconnect.deletion_prepare_failed")); }
+            }, downloadPrompt, () -> {
+                endSyncSession(); future.complete(responseBuf(false, List.of()));
+                abortLogin(Text.translatable("synchronize.disconnect.disconnected_by_user")); client.setScreen(parent);
+            }));
+        });
+        return future;
+    }
+
+    private static void showProfileReady(ClientLoginNetworkHandler handler, Screen parent, CompletableFuture<PacketByteBuf> future) throws Exception {
+        String id = ProfileManager.session();
+        MinecraftClient client = MinecraftClient.getInstance();
+        Screen back = new net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen(new net.minecraft.client.gui.screen.TitleScreen());
+        Screen screen = new ProfileMessageScreen(back, Text.translatable("synchronize.profiles.ready"), Text.translatable("synchronize.profiles.ready_body"),
+                Text.translatable("synchronize.profiles.switch"), () -> {
+                    try { ProfileManager.queue(id, true); }
+                    catch (Exception e) {
+                        Synchronize.LOGGER.error("Cannot queue profile switch", e);
+                        client.setScreen(new ProfileMessageScreen(back, Text.translatable("synchronize.profiles.error"), Text.literal(String.valueOf(e.getMessage())), Text.translatable("synchronize.profiles.back"), () -> client.setScreen(back), null, null));
+                    }
+                }, Text.translatable("synchronize.profiles.back"), () -> client.setScreen(back));
+        endSyncSession();
+        showVerificationScreen(handler, screen, Text.translatable("synchronize.profiles.restart"));
+        future.complete(responseBuf(false, List.of()));
+    }
+
     public static void init() {
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+            ProfileManager.cancelDownload();
             endSyncSession();
             PendingUpdateManager.onClientStopping();
         });
         ClientTickEvents.END_CLIENT_TICK.register(ClientSyncHandler::checkForUnexpectedDisconnect);
 
         ClientLoginNetworking.registerGlobalReceiver(SyncPackets.MOD_VERSION, (client, handler, buf, listenerAdder) -> {
+            if (versionHandler != handler) ProfileManager.cancelDownload();
             versionHandler = handler;
             loginConnection = handler.connection;
             verificationHandler = null;
@@ -544,210 +596,32 @@ public class ClientSyncHandler {
         });
 
         ClientLoginNetworking.registerGlobalReceiver(SyncPackets.PROMPT, (client, handler, buf, listenerAdder) -> {
-            loginConnection = handler.connection;
-            Map<String, FileEntry> entries;
-            SyncPackets.GarbageInfo garbageInfo;
             try {
-                entries = SyncPackets.readFileEntryMap(buf);
+                Map<String, FileEntry> entries = SyncPackets.readFileEntryMap(buf);
                 validateEntries(entries);
-                garbageInfo = SyncPackets.readGarbageInfo(buf);
-                for (String path : garbageInfo.garbage().keySet()) {
-                    if (!PathSecurity.isSafeRelativePath(path)) throw new SecurityException("Invalid garbage path");
-                }
-            } catch (RuntimeException e) {
+                SyncPackets.GarbageInfo garbage = SyncPackets.readGarbageInfo(buf);
+                return profilePromptAsync(client, handler, entries, garbage.garbage(), null);
+            } catch (Exception e) {
+                Synchronize.LOGGER.error("Invalid profile manifest", e);
                 abortLogin(Text.translatable("synchronize.disconnect.invalid_manifest"));
                 return CompletableFuture.completedFuture(PacketByteBufs.create());
             }
-            MissingFiles missing = getMissingFiles(entries);
-            Map<String, Boolean> existingGarbage = getExistingGarbage(garbageInfo.garbage());
-
-            if (missing.mandatory.isEmpty() && missing.optionalDisplayNames.isEmpty() && existingGarbage.isEmpty()) {
-                return CompletableFuture.completedFuture(responseBuf(true, List.of()));
-            }
-
-            activeSyncEntries = entries;
-            CompletableFuture<PacketByteBuf> future = new CompletableFuture<>();
-
-            client.execute(() -> {
-                Screen currentScreen = client.currentScreen;
-                beginSyncSession(currentScreen);
-                Runnable showDownloadPrompt = () -> client.setScreen(new PromptScreen(currentScreen, missing.mandatory, missing.optionalDisplayNames, requestedFiles -> {
-                    if (requestedFiles.isEmpty()) {
-                        endSyncSession();
-                        client.setScreen(currentScreen);
-                        future.complete(responseBuf(true, requestedFiles));
-                        return;
-                    }
-                    activeRequestedFiles.clear();
-                    activeRequestedFiles.addAll(requestedFiles);
-                    vanillaTotalFiles = Math.max(1, requestedFiles.size());
-                    vanillaCompletedFiles.set(0);
-                    downloadedFiles.clear();
-
-                    activeProgressScreen = new DownloadProgressScreen(() -> {
-                        endSyncSession();
-                        clearTempFolder();
-                        abortLogin(Text.translatable("synchronize.disconnect.aborted_by_user"));
-                    }, null);
-                    client.setScreen(activeProgressScreen);
-                    future.complete(responseBuf(true, requestedFiles));
-                }, () -> {
-                    endSyncSession();
-                    future.complete(responseBuf(false, List.of()));
-                    client.setScreen(currentScreen);
-                }));
-
-                if (existingGarbage.isEmpty()) {
-                    showDownloadPrompt.run();
-                } else {
-                    boolean garbageNeedsRestart = existingGarbage.values().stream().anyMatch(Boolean.TRUE::equals);
-                    client.setScreen(new DeletedFilesPromptScreen(currentScreen, new ArrayList<>(existingGarbage.keySet()), garbageNeedsRestart, destinations -> {
-                        if (garbageNeedsRestart) {
-                            try {
-                                PendingUpdateManager.appendDeletions(destinations);
-                                client.scheduleStop();
-                            } catch (Exception e) {
-                                Synchronize.LOGGER.error("Failed to stage garbage files", e);
-                                endSyncSession();
-                                if (!future.isDone()) future.complete(responseBuf(false, List.of()));
-                                abortLogin(Text.translatable("synchronize.disconnect.deletion_prepare_failed"));
-                            }
-                        } else {
-                            deleteFilesNow(destinations);
-                            if (missing.mandatory.isEmpty() && missing.optionalDisplayNames.isEmpty()) {
-                                endSyncSession();
-                                client.setScreen(currentScreen);
-                                if (!future.isDone()) future.complete(responseBuf(true, List.of()));
-                            } else {
-                                showDownloadPrompt.run();
-                            }
-                        }
-                    }, () -> {
-                        if (missing.mandatory.isEmpty() && missing.optionalDisplayNames.isEmpty()) {
-                            endSyncSession();
-                            client.setScreen(currentScreen);
-                            if (!future.isDone()) future.complete(responseBuf(true, List.of()));
-                        } else {
-                            showDownloadPrompt.run();
-                        }
-                    }, () -> {
-                        endSyncSession();
-                        if (!future.isDone()) future.complete(responseBuf(false, List.of()));
-                        abortLogin(Text.translatable("synchronize.disconnect.disconnected_by_user"));
-                    }));
-                }
-
-            });
-            return future;
         });
 
         ClientLoginNetworking.registerGlobalReceiver(SyncPackets.EXTERNAL_PROMPT, (client, handler, buf, listenerAdder) -> {
-            loginConnection = handler.connection;
-            SyncPackets.ExternalPrompt payload;
             try {
-                payload = SyncPackets.readExternalPrompt(buf);
+                SyncPackets.ExternalPrompt payload = SyncPackets.readExternalPrompt(buf);
                 validateEntries(payload.fileHashes());
-                for (String path : payload.garbage().keySet()) {
-                    if (!PathSecurity.isSafeRelativePath(path)) throw new SecurityException("Invalid garbage path");
-                }
-            } catch (RuntimeException e) {
+                return profilePromptAsync(client, handler, payload.fileHashes(), payload.garbage(), payload);
+            } catch (Exception e) {
+                Synchronize.LOGGER.error("Invalid external profile manifest", e);
                 abortLogin(Text.translatable("synchronize.disconnect.invalid_external_manifest"));
                 return CompletableFuture.completedFuture(PacketByteBufs.create());
             }
-            MissingFiles missing = getMissingFiles(payload.fileHashes());
-            Map<String, Boolean> existingGarbage = getExistingGarbage(payload.garbage());
-
-            if (missing.mandatory.isEmpty() && missing.optionalDisplayNames.isEmpty() && existingGarbage.isEmpty()) {
-                return CompletableFuture.completedFuture(responseBuf(true, List.of()));
-            }
-
-            activeSyncEntries = payload.fileHashes();
-            String serverIp = resolveServerIp(handler);
-            CompletableFuture<PacketByteBuf> future = new CompletableFuture<>();
-
-            client.execute(() -> {
-                Screen currentScreen = client.currentScreen;
-                beginSyncSession(currentScreen);
-                Runnable showDownloadPrompt = () -> client.setScreen(new PromptScreen(currentScreen, missing.mandatory, missing.optionalDisplayNames, requestedFiles -> {
-                    if (requestedFiles.isEmpty()) {
-                        endSyncSession();
-                        client.setScreen(currentScreen);
-                        if (!future.isDone()) {
-                            future.complete(responseBuf(true, requestedFiles));
-                        }
-                        return;
-                    }
-
-                    activeRequestedFiles.clear();
-                    activeRequestedFiles.addAll(requestedFiles);
-                    downloadedFiles.clear();
-
-                    activeProgressScreen = new DownloadProgressScreen(() -> {
-                        endSyncSession();
-                        if (!future.isDone()) {
-                            future.complete(responseBuf(false, requestedFiles));
-                        }
-                        clearTempFolder();
-                        abortLogin(Text.translatable("synchronize.disconnect.aborted_by_user"));
-                    }, null);
-                    client.setScreen(activeProgressScreen);
-
-                    ClientExternalDownloader.startDownload(serverIp, payload.sessionId(), payload.aesKey(), payload.port(), requestedFiles, activeProgressScreen, () -> {
-                        if (!future.isDone()) {
-                            future.complete(responseBuf(true, requestedFiles));
-                        }
-                    });
-                }, () -> {
-                    endSyncSession();
-                    future.complete(responseBuf(false, List.of()));
-                    client.setScreen(currentScreen);
-                }));
-
-                if (existingGarbage.isEmpty()) {
-                    showDownloadPrompt.run();
-                } else {
-                    boolean garbageNeedsRestart = existingGarbage.values().stream().anyMatch(Boolean.TRUE::equals);
-                    client.setScreen(new DeletedFilesPromptScreen(currentScreen, new ArrayList<>(existingGarbage.keySet()), garbageNeedsRestart, destinations -> {
-                        if (garbageNeedsRestart) {
-                            try {
-                                PendingUpdateManager.appendDeletions(destinations);
-                                client.scheduleStop();
-                            } catch (Exception e) {
-                                Synchronize.LOGGER.error("Failed to stage garbage files", e);
-                                endSyncSession();
-                                if (!future.isDone()) future.complete(responseBuf(false, List.of()));
-                                abortLogin(Text.translatable("synchronize.disconnect.deletion_prepare_failed"));
-                            }
-                        } else {
-                            deleteFilesNow(destinations);
-                            if (missing.mandatory.isEmpty() && missing.optionalDisplayNames.isEmpty()) {
-                                endSyncSession();
-                                client.setScreen(currentScreen);
-                                if (!future.isDone()) future.complete(responseBuf(true, List.of()));
-                            } else {
-                                showDownloadPrompt.run();
-                            }
-                        }
-                    }, () -> {
-                        if (missing.mandatory.isEmpty() && missing.optionalDisplayNames.isEmpty()) {
-                            endSyncSession();
-                            client.setScreen(currentScreen);
-                            if (!future.isDone()) future.complete(responseBuf(true, List.of()));
-                        } else {
-                            showDownloadPrompt.run();
-                        }
-                    }, () -> {
-                        endSyncSession();
-                        if (!future.isDone()) future.complete(responseBuf(false, List.of()));
-                        abortLogin(Text.translatable("synchronize.disconnect.disconnected_by_user"));
-                    }));
-                }
-
-            });
-            return future;
         });
 
         ClientLoginNetworking.registerGlobalReceiver(SyncPackets.FILE_CHUNK, (client, handler, buf, listenerAdder) -> {
+            if (versionHandler != handler) return CompletableFuture.completedFuture(PacketByteBufs.create());
             loginConnection = handler.connection;
             SyncPackets.FileChunk payload;
             try {
@@ -800,6 +674,7 @@ public class ClientSyncHandler {
                     return CompletableFuture.completedFuture(PacketByteBufs.create());
                 }
 
+                ProfileManager.receive(payload.data().length);
                 activeChunkStream.write(payload.data());
                 activeChunkBytes += payload.data().length;
                 activeChunkNumber = payload.currentChunk();
@@ -841,12 +716,14 @@ public class ClientSyncHandler {
             } catch (Exception e) {
                 Synchronize.LOGGER.error("Failed to write chunk to disk for {}", safePath, e);
                 closeActiveChunkStreamQuietly();
+                abortLogin(Text.translatable("synchronize.disconnect.download_failed", String.valueOf(e.getMessage())));
             }
 
             return CompletableFuture.completedFuture(PacketByteBufs.create());
         });
 
         ClientLoginNetworking.registerGlobalReceiver(SyncPackets.FILE_ERROR, (client, handler, buf, listenerAdder) -> {
+            if (versionHandler != handler) return CompletableFuture.completedFuture(PacketByteBufs.create());
             String filePath = buf.readString();
             if (activeProgressScreen != null) {
                 client.execute(() -> {
@@ -859,6 +736,7 @@ public class ClientSyncHandler {
         });
 
         ClientLoginNetworking.registerGlobalReceiver(SyncPackets.TRANSFER_COMPLETE, (client, handler, buf, listenerAdder) -> {
+            if (versionHandler != handler) return CompletableFuture.completedFuture(PacketByteBufs.create());
             CompletableFuture<PacketByteBuf> future = new CompletableFuture<>();
             client.execute(() -> {
                 if (activeProgressScreen != null) {

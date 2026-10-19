@@ -36,7 +36,7 @@ public final class OfficialReleaseInfo {
     private static void resolve() {
         String version = serverVersion();
         String hash = ModJar.sha256();
-        Path scratch = FabricLoader.getInstance().getConfigDir().resolve("synchronize/temp_verify");
+        Path scratch = FabricLoader.getInstance().getConfigDir().resolve("synchronize/temp/verify");
         try {
             OfficialReleases.Lookup lookup = OfficialReleases.lookup(version, hash, scratch);
             releasePageUrl = lookup.bestPageUrl(version);

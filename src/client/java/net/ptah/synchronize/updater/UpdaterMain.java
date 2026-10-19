@@ -1,7 +1,7 @@
 package net.ptah.synchronize.updater;
 
+import net.ptah.synchronize.client.profile.ProfileStorage;
 import javax.swing.*;
-import java.awt.*;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -9,15 +9,16 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class UpdaterMain {
     public static void main(String[] args) {
         if (args.length < 3) return;
+        System.setProperty("awt.useSystemAAFontSettings", "on");
+        System.setProperty("swing.aatext", "true");
         final String textApplying = argOrDefault(args, 3, "Applying pending files...");
-        final String textDeleting = argOrDefault(args, 4, "Deleting %s...");
-        final String textMoving = argOrDefault(args, 5, "Moving: %s");
         final String textComplete = argOrDefault(args, 6, "Update complete.");
         long pid = Long.parseLong(args[0]);
         File pendingDir;
@@ -26,136 +27,97 @@ public class UpdaterMain {
             pendingDir = new File(args[1]).getCanonicalFile();
             gameDir = new File(args[2]).getCanonicalFile();
             if (!Files.isDirectory(pendingDir.toPath()) || !Files.isDirectory(gameDir.toPath())
-                    || Files.isSymbolicLink(pendingDir.toPath()) || Files.isSymbolicLink(gameDir.toPath())) {
-                return;
-            }
-        } catch (Exception e) {
-            return;
-        }
+                    || Files.isSymbolicLink(pendingDir.toPath()) || Files.isSymbolicLink(gameDir.toPath())) return;
+        } catch (Exception e) { return; }
 
         new Thread(() -> {
             while (ProcessHandle.of(pid).isPresent()) {
-                try { Thread.sleep(500); } catch (InterruptedException ignored) {
-                    Thread.currentThread().interrupt();
-                    return;
-                }
+                try { Thread.sleep(500); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
             }
-
-            try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception ignored) {}
-
-            JFrame frame = new JFrame();
-            frame.setUndecorated(true);
-            frame.setAlwaysOnTop(true);
-            frame.setSize(450, 140);
-            frame.setLocationRelativeTo(null);
-
-            JPanel panel = new JPanel(new BorderLayout());
-            panel.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60), 3));
-            panel.setBackground(new Color(40, 40, 40));
-
-            JLabel titleLabel = new JLabel("Synchronize", SwingConstants.CENTER);
-            titleLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
-            titleLabel.setForeground(Color.WHITE);
-            titleLabel.setBorder(BorderFactory.createEmptyBorder(15, 10, 10, 10));
-
-            JLabel statusLabel = new JLabel(textApplying, SwingConstants.CENTER);
-            statusLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
-            statusLabel.setForeground(new Color(200, 200, 200));
-            statusLabel.setBorder(BorderFactory.createEmptyBorder(8, 10, 10, 10));
-
-            JProgressBar progressBar = new JProgressBar();
-            progressBar.setIndeterminate(false);
-            progressBar.setMinimum(0);
-            progressBar.setMaximum(100);
-            progressBar.setValue(0);
-            progressBar.setBorder(BorderFactory.createEmptyBorder(0, 20, 20, 20));
-            progressBar.setBackground(new Color(40, 40, 40));
-            progressBar.setForeground(new Color(0, 150, 255));
-
-            panel.add(titleLabel, BorderLayout.NORTH);
-
-            JPanel centerPanel = new JPanel(new BorderLayout());
-            centerPanel.setBackground(new Color(40, 40, 40));
-            centerPanel.setBorder(BorderFactory.createEmptyBorder(0, 30, 0, 30));
-            centerPanel.add(progressBar, BorderLayout.CENTER);
-            centerPanel.add(statusLabel, BorderLayout.SOUTH);
-            panel.add(centerPanel, BorderLayout.CENTER);
-            frame.add(panel);
-            frame.setVisible(true);
+            HelperWindow[] windows = new HelperWindow[1];
+            try {
+                SwingUtilities.invokeAndWait(() -> {
+                    try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); }
+                    catch (Exception ignored) {}
+                    windows[0] = new HelperWindow();
+                    windows[0].setVisible(true);
+                });
+            } catch (Exception e) { e.printStackTrace(); return; }
+            HelperWindow window = windows[0];
+            try {
+                Path root = gameDir.toPath();
+                ProfileStorage.initialize(root);
+                Properties state = ProfileStorage.state(root);
+                String previous = ProfileStorage.active(root);
+                String target = state.getProperty("pending", "");
+                Path journal = ProfileStorage.resolve(ProfileStorage.home(root), "transaction/journal.properties");
+                if (Files.exists(journal)) {
+                    Properties transaction = ProfileStorage.read(journal);
+                    if (!"committed".equals(transaction.getProperty("phase"))) {
+                        target = transaction.getProperty("previous", "default");
+                        window.context("Restoring previous profile", ProfileStorage.name(root, transaction.getProperty("target", previous)) + " → " + ProfileStorage.name(root, target));
+                    } else window.context("Finishing profile switch", ProfileStorage.name(root, transaction.getProperty("target", previous)));
+                } else if (!target.isEmpty()) {
+                    window.context("Switching profile", ProfileStorage.name(root, previous) + " → " + ProfileStorage.name(root, target));
+                } else window.context("Applying updates", textApplying);
+                ProfileStorage.applyPending(root, window::report);
+            } catch (Exception e) { fail(window, e); return; }
 
             List<File> files = new ArrayList<>();
+            window.report(new ProfileStorage.Progress("updating", "", 0, -1));
             collectFiles(pendingDir, files);
             File deletionManifest = new File(pendingDir.getParentFile(), "pending_deletions.json");
             List<String> deletions = readDeletionManifest(deletionManifest);
-            int total = files.size() + deletions.size();
-            if (total == 0) total = 1;
-            final int totalCount = total;
-            int progressIndex = 0;
-
+            long total = (long) files.size() + deletions.size();
+            long completed = 0;
+            Exception failure = null;
             for (String deletion : deletions) {
-                final String fileName = deletion;
-                final int current = ++progressIndex;
-                SwingUtilities.invokeLater(() -> {
-                    statusLabel.setText(textDeleting.replace("%s", fileName));
-                    progressBar.setValue((int) ((current / (float) totalCount) * 100));
-                });
+                window.report(new ProfileStorage.Progress("deleting", deletion, completed, total));
                 try {
-                    Path target = resolveUnder(gameDir.toPath(), deletion);
-                    if (Files.isSymbolicLink(target)) {
-                        System.err.println("Skipping symbolic link deletion: " + deletion);
-                    } else {
-                        Files.deleteIfExists(target);
-                        System.out.println("Deleted " + deletion);
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                    Path target = updateDestination(gameDir.toPath(), deletion);
+                    if (Files.isSymbolicLink(target)) System.err.println("Skipping symbolic link deletion: " + deletion);
+                    else { Files.deleteIfExists(target); System.out.println("Deleted " + deletion); }
+                } catch (Exception e) { e.printStackTrace(); failure = e; }
+                window.report(new ProfileStorage.Progress("deleting", deletion, ++completed, total));
                 try { Thread.sleep(50); } catch (InterruptedException ignored) {}
             }
             if (deletionManifest.exists()) deletionManifest.delete();
-
-            for (int i = 0; i < files.size(); i++) {
-                File child = files.get(i);
+            for (File child : files) {
                 Path relative = pendingDir.toPath().relativize(child.toPath());
                 File dest;
                 try {
                     Path source = resolveUnder(pendingDir.toPath(), relative.toString());
                     if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(source)) continue;
-                    dest = resolveUnder(gameDir.toPath(), relative.toString()).toFile();
+                    dest = updateDestination(gameDir.toPath(), relative.toString()).toFile();
                 } catch (Exception e) {
-                    System.err.println("Skipping unsafe update path: " + relative);
-                    continue;
+                    System.err.println("Skipping unsafe update path: " + relative); failure = e; continue;
                 }
-                final String fileName = relative.toString();
-                final int current = ++progressIndex;
-
-                SwingUtilities.invokeLater(() -> {
-                    statusLabel.setText(textMoving.replace("%s", fileName));
-                    progressBar.setValue((int) ((current / (float) totalCount) * 100));
-                });
-
+                String name = relative.toString();
+                window.report(new ProfileStorage.Progress("updating", name, completed, total));
                 try {
                     Files.createDirectories(dest.getParentFile().toPath());
                     Files.move(child.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    System.out.println("Moved " + fileName);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
+                    System.out.println("Moved " + name);
+                } catch (Exception e) { e.printStackTrace(); failure = e; }
+                window.report(new ProfileStorage.Progress("updating", name, ++completed, total));
                 try { Thread.sleep(50); } catch (InterruptedException ignored) {}
             }
-
             cleanEmptyDirectories(pendingDir);
-
-            SwingUtilities.invokeLater(() -> {
-                statusLabel.setText(textComplete);
-                statusLabel.setForeground(new Color(100, 255, 100));
-                progressBar.setValue(100);
-            });
-
+            if (failure != null) { fail(window, failure); return; }
+            window.complete(textComplete);
             try { Thread.sleep(3500); } catch (InterruptedException ignored) {}
-            System.exit(0);
-        }).start();
+            SwingUtilities.invokeLater(() -> { window.dispose(); System.exit(0); });
+        }, "Synchronize Helper").start();
+    }
+
+    private static void fail(HelperWindow window, Exception error) {
+        error.printStackTrace();
+        window.fail(error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+        SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(window, error.getMessage(), "Synchronize Helper error", JOptionPane.ERROR_MESSAGE);
+            window.dispose(); System.exit(1);
+        });
     }
 
     private static String argOrDefault(String[] args, int index, String fallback) {
@@ -190,6 +152,11 @@ public class UpdaterMain {
             if (Files.isDirectory(childPath, LinkOption.NOFOLLOW_LINKS)) collectFiles(child, result);
             else if (Files.isRegularFile(childPath, LinkOption.NOFOLLOW_LINKS)) result.add(child);
         }
+    }
+
+    private static Path updateDestination(Path root, String raw) throws Exception {
+        if (net.ptah.synchronize.client.profile.ProfileStorage.shared(root, raw)) throw new java.io.IOException("Protected shared directory: " + raw);
+        return net.ptah.synchronize.client.profile.ProfileStorage.resolve(root, raw);
     }
 
     private static Path resolveUnder(Path base, String raw) throws Exception {

@@ -10,8 +10,11 @@
 
 A feature-rich synchronization mod that **automatically installs** and syncs mods and various assets when the client closes, while also utilizing **Limbo mode** to let vanilla players join and receive interactive chat prompts to download the required files. **All currently compiled Minecraft versions will receive future updates.**
 
-**REMEMBER!** Synchronize is currently in **Beta**. Bugs and unexpected behavior may occur. Back up your files before use and report any issues you encounter.
-**Use only official JARs published Modrinth and GitHub Releases page** on both the server and client. 
+**REMEMBER!** Synchronize is currently in **Beta**. Profiles keep your personal setup separate from server setups, but bugs and unexpected behavior may still occur. We recommend backing up important files before use. Please report any issues you encounter.
+
+**WARNING!** The mod currently lacks a mechanism to detect **malicious JAR files**. Therefore, **ensure you only connect to trusted servers**, and keep in mind that **unknown JAR files can severely compromise your system**.
+
+**Use only official version of this mod which published Modrinth and Github Releases page** on both the server and client. 
 <br/>
 <br/>
 You can show your support for my development efforts by using this mod and if you’d like to treat me to a snack or drink while i'm working on this, you can make a donation:
@@ -22,6 +25,8 @@ You can show your support for my development efforts by using this mod and if yo
 
 
 ## Preview
+
+(Click images to enlarge)
 
 <table align="center">
   <tr>
@@ -34,6 +39,16 @@ You can show your support for my development efforts by using this mod and if yo
       <br />
       <sub>Synchronization progress</sub>
     </td>    
+	<td align="center">
+      <a href="/preview-5.gif" alt="Click to see" target="_blank">
+        <img src="https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-5.gif" alt="Profile Manager Preview" width="100%" />
+      </a>
+      <br />
+      <b>Profile Manager</b>
+      <br />
+      <sub>Your personal setup is kept separate from server setups, so syncing with a server won’t overwrite your own mods and settings.
+	  </sub>
+    </td>
 	<td align="center">
       <a href="/preview.gif" alt="Click to see" target="_blank">
         <img src="https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview.gif" alt="Untrusted Server Preview" width="100%" />
@@ -52,6 +67,7 @@ You can show your support for my development efforts by using this mod and if yo
       <br />
       <sub>When client uses different jar from server that is unofficial</sub>
     </td>
+
   </tr>
 </table> 
 
@@ -199,7 +215,7 @@ The client and server must prove that they know the same code.
 
 > **REMEMBER!** A successful handshake does not prove that either JAR is an official GitHub release. Only use this fallback with a server owner you trust, and keep the code private.
 
-Preview
+Preview of Editing Handshake Code:
 
 ![Handshake Edit Preview](https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-4.gif)
 

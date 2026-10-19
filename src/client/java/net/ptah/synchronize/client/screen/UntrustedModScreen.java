@@ -240,6 +240,10 @@ public class UntrustedModScreen extends SynchronizeScreen {
     *///?} else
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         this.renderSyncBackground(context);
+        //? if <1.20 {
+        /*super.render(context.getMatrices(), mouseX, mouseY, delta);
+        *///?} else
+        super.render(context, mouseX, mouseY, delta);
         int midX = this.width / 2;
 
         if (showIcon) {
@@ -256,11 +260,6 @@ public class UntrustedModScreen extends SynchronizeScreen {
         context.drawCenteredTextWithShadow(this.textRenderer,
                 Text.translatable("synchronize.untrusted.client_line", ModJar.version(), shortHash(ModJar.sha256())), midX, versionY + VERSION_LINE_HEIGHT, 0xFFAAAAAA);
         drawLines(context, hintLines, midX, hintY, hintColor);
-
-        //? if <1.20 {
-        /*super.render(context.getMatrices(), mouseX, mouseY, delta);
-        *///?} else
-        super.render(context, mouseX, mouseY, delta);
     }
 
     private void drawLines(DrawContext context, List<OrderedText> lines, int midX, int y, int color) {

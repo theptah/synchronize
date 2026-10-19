@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 
 public final class PendingUpdateManager {
     private PendingUpdateManager() {}
+    private static final java.util.concurrent.atomic.AtomicBoolean updaterStarted = new java.util.concurrent.atomic.AtomicBoolean();
 
     public static File getPendingDir() {
         return new File(FabricLoader.getInstance().getConfigDir().toFile(), "synchronize/pending");
@@ -99,6 +100,9 @@ public final class PendingUpdateManager {
     }
 
     public static synchronized boolean hasPending() {
+        try {
+            if (net.ptah.synchronize.client.profile.ProfileStorage.pending(FabricLoader.getInstance().getGameDir())) return true;
+        } catch (IOException e) { throw new IllegalStateException("Cannot read pending profile operation", e); }
         return countPendingFiles(getPendingDir()) > 0 || getPendingDeletionsFile().isFile();
     }
 
@@ -164,19 +168,24 @@ public final class PendingUpdateManager {
     }
 
     public static void spawnUpdater(boolean forceExit) {
+        if (!updaterStarted.compareAndSet(false, true)) return;
         try {
             File gameDir = FabricLoader.getInstance().getGameDir().toFile();
             File pendingDir = getPendingDir();
+            Files.createDirectories(pendingDir.toPath());
             File updaterDir = new File(FabricLoader.getInstance().getConfigDir().toFile(), "synchronize/updater");
-            File classFile = new File(updaterDir, "net/ptah/synchronize/updater/UpdaterMain.class");
-            classFile.getParentFile().mkdirs();
-
-            try (InputStream in = PendingUpdateManager.class.getResourceAsStream("/net/ptah/synchronize/updater/UpdaterMain.class")) {
-                if (in != null) {
-                    Files.copy(in, classFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                } else {
-                    System.err.println("[Synchronize] Could not find UpdaterMain.class in jar! Cannot spawn safe updater.");
-                    return;
+            for (String resource : new String[] {
+                    "net/ptah/synchronize/updater/UpdaterMain.class",
+                    "net/ptah/synchronize/updater/HelperWindow.class",
+                    "net/ptah/synchronize/updater/HelperProgressBarUI.class",
+                    "net/ptah/synchronize/client/profile/ProfileStorage.class",
+                    "net/ptah/synchronize/client/profile/ProfileStorage$Progress.class",
+                    "net/ptah/synchronize/util/StorageLayout.class"}) {
+                Path target = net.ptah.synchronize.util.PathSecurity.resolveUnder(updaterDir.toPath(), resource);
+                Files.createDirectories(target.getParent());
+                try (InputStream in = PendingUpdateManager.class.getResourceAsStream("/" + resource)) {
+                    if (in == null) throw new IOException(resource + " missing");
+                    Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
                 }
             }
 
@@ -212,6 +221,7 @@ public final class PendingUpdateManager {
                 System.exit(0);
             }
         } catch (Exception e) {
+            updaterStarted.set(false);
             e.printStackTrace();
         }
     }

@@ -104,7 +104,7 @@ public class ModUpdateScreen extends SynchronizeScreen {
         calculateLayout();
         int midX = this.width / 2;
 
-        this.closeGameButton = ButtonWidget.builder(Text.translatable("synchronize.button.close_game"), b -> closeGame())
+        this.closeGameButton = ButtonWidget.builder(Text.translatable("synchronize.button.quit_game"), b -> closeGame())
                 .dimensions(midX - BUTTON_WIDTH - 5, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
         this.cancelButton = ButtonWidget.builder(Text.translatable("synchronize.button.cancel"), b -> cancel())
                 .dimensions(midX + 5, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT).build();
@@ -213,6 +213,10 @@ public class ModUpdateScreen extends SynchronizeScreen {
     *///?} else
     public void render(DrawContext context, int mouseX, int mouseY, float delta) {
         this.renderSyncBackground(context);
+        //? if <1.20 {
+        /*super.render(context.getMatrices(), mouseX, mouseY, delta);
+        *///?} else
+        super.render(context, mouseX, mouseY, delta);
         int midX = this.width / 2;
 
         if (showImage) {
@@ -254,11 +258,6 @@ public class ModUpdateScreen extends SynchronizeScreen {
             context.drawCenteredTextWithShadow(this.textRenderer, statusLines.get(i), midX, y, 0xFFFFFFFF);
             y += LINE_HEIGHT;
         }
-
-        //? if <1.20 {
-        /*super.render(context.getMatrices(), mouseX, mouseY, delta);
-        *///?} else
-        super.render(context, mouseX, mouseY, delta);
     }
 
     private void drawRoundedTexture(DrawContext context, Identifier texture, int x, int y, int width, int height,
