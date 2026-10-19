@@ -24,7 +24,7 @@ You can show your support for my development efforts by using this mod and if yo
 </a>
 
 
-## Preview
+## Quick Preview
 
 (Click images to enlarge)
 
@@ -39,16 +39,6 @@ You can show your support for my development efforts by using this mod and if yo
       <br />
       <sub>Synchronization progress</sub>
     </td>    
-	<td align="center">
-      <a href="/preview-5.gif" alt="Click to see" target="_blank">
-        <img src="https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-5.gif" alt="Profile Manager Preview" width="100%" />
-      </a>
-      <br />
-      <b>Profile Manager</b>
-      <br />
-      <sub>Your personal setup is kept separate from server setups, so syncing with a server won’t overwrite your own mods and settings.
-	  </sub>
-    </td>
 	<td align="center">
       <a href="/preview.gif" alt="Click to see" target="_blank">
         <img src="https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview.gif" alt="Untrusted Server Preview" width="100%" />
@@ -69,7 +59,7 @@ You can show your support for my development efforts by using this mod and if yo
     </td>
 
   </tr>
-</table> 
+</table>
 
 ## Supported Versions
 
@@ -107,7 +97,78 @@ You can show your support for my development efforts by using this mod and if yo
 
 Synchronization is enabled for **dedicated servers** and worlds opened to **LAN**.
 
-### Commands
+### Joining a Server
+
+When connecting, Synchronize checks the registered files against the client's local files.
+
+- Missing or different mandatory files must be synchronized to continue.
+- Optional files can be selected by the player.
+- Files are downloaded and checked against the expected hashes before being applied.
+- Changes inside `mods/` require a game restart.
+- Registered files with the `restart` option will require a game restart.
+
+Follow the on-screen instructions. If a restart is required, fully close Minecraft, launch it again, and reconnect.
+
+#### Version Verification
+
+Synchronize's own JAR is checked separately from ordinary synchronized files.
+
+| Situation | Result |
+| :--- | :--- |
+| Client and server JAR hashes match | Connection continues without a GitHub verification request. |
+| Hashes differ and the server JAR cannot be matched to an official release | **Untrusted Server** screen. |
+| The server JAR is official, but the client JAR cannot be matched to an official release | **Untrusted Client** screen. |
+| Both JARs are official, but their hashes differ | The client is offered the exact official JAR used by the server. |
+| Verification cannot be completed | A verification-failed screen is shown, with a [handshake fallback](#handshake-fallback) when available. |
+
+> **NOTE:** Matching client and server hashes mean the files are identical—not necessarily official. GitHub verification is intentionally skipped when both hashes match.
+
+#### Handshake Fallback
+
+The handshake provides a user-approved fallback when normal verification cannot be completed, such as when GitHub is unavailable.
+
+1. The server generates a handshake code and saves it in `config/synchronize/config.json` under `handshake`.
+2. The server owner privately shares the code with trusted players.
+3. Players enter it in the handshake field on Minecraft's **Add Server / Edit Server** screen.
+4. When the fallback is offered, players explicitly choose to reconnect using the handshake.
+
+The client and server must prove that they know the same code.
+
+> **REMEMBER!** A successful handshake does not prove that either JAR is an official GitHub release. Only use this fallback with a server owner you trust, and keep the code private.
+
+Preview of Editing Handshake Code:
+
+![Handshake Edit Preview](https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-4.gif)
+
+### Profiles
+
+Synchronize keeps your personal setup separate from server setups using profiles.
+
+- **Default** is your personal setup. It cannot be deleted.
+- **Server profiles** store each server’s synchronized files and any changes made while using that profile.
+- **Common folders**, such as `saves` and `screenshots`, remain available across profiles.
+
+#### Switching Profiles
+
+Open **Multiplayer → Profile → Profiles**, then choose a profile:
+
+- **Apply** schedules the switch for the next time Minecraft closes.
+- **Apply & Exit** closes Minecraft and applies the switch immediately afterward.
+- **Cancel** in the pending-switch notice cancels a scheduled switch.
+
+**Do not launch Minecraft** before **Helper** to finish.
+
+#### Deleting Profiles
+
+Use the trash icon to delete a server profile. Deleting the active profile closes Minecraft, restores Default, and only then removes the profile.
+
+> **Note:** Profiles are not a security sandbox or a replacement for backups. Only synchronize with servers you trust.
+
+Preview of Profile Manager & Helper:
+
+![Profile Manager Preview](https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-5.gif)
+
+## Commands
 Synchronize commands are available from the **server console**, not from in-game player chat—even for operators. Enter the commands below without a leading `/`.
 
 | Command | Description | Example |
@@ -117,7 +178,7 @@ Synchronize commands are available from the **server console**, not from in-game
 | `synchronize remove_files <path>` | Removes a file or directory's entries from the synchronization list. Does not delete the actual files. | `synchronize remove_files mods/example.jar` |
 | `synchronize refresh` | Recalculates tracked file hashes, processes missing tracked files, and reloads configuration, translations, and rate-limit settings. | `synchronize refresh` |
 
-#### Options for add_files
+### Options for add_files
 
 | Option | Description | Example |
 | :--- | :--- | :--- |
@@ -175,49 +236,6 @@ Run `synchronize remove_files <path>`. This unregisters the file but does not de
 - `rateLimitMaxRequests`: Maximum number of bulk file-transfer requests allowed **per IP address** within the configured time window. A bulk request can include multiple files; this is not a limit on individual files or download speed. 
 - `rateLimitWindowSeconds`: Duration of the rolling time window, in seconds. Accepted requests count toward the limit until they fall outside this window.
 - `handshake`: If the request to verify whether the client is using the official version via GitHub returns an error, the code provided by the server owner in this field is used to force access to the server.
-
-## Joining a Server
-
-When connecting, Synchronize checks the registered files against the client's local files.
-
-- Missing or different mandatory files must be synchronized to continue.
-- Optional files can be selected by the player.
-- Files are downloaded and checked against the expected hashes before being applied.
-- Changes inside `mods/` require a game restart.
-- Registered files with the `restart` option will require a game restart.
-
-Follow the on-screen instructions. If a restart is required, fully close Minecraft, launch it again, and reconnect.
-
-### Version Verification
-
-Synchronize's own JAR is checked separately from ordinary synchronized files.
-
-| Situation | Result |
-| :--- | :--- |
-| Client and server JAR hashes match | Connection continues without a GitHub verification request. |
-| Hashes differ and the server JAR cannot be matched to an official release | **Untrusted Server** screen. |
-| The server JAR is official, but the client JAR cannot be matched to an official release | **Untrusted Client** screen. |
-| Both JARs are official, but their hashes differ | The client is offered the exact official JAR used by the server. |
-| Verification cannot be completed | A verification-failed screen is shown, with a [handshake fallback](#handshake-fallback) when available. |
-
-> **NOTE:** Matching client and server hashes mean the files are identical—not necessarily official. GitHub verification is intentionally skipped when both hashes match.
-
-### Handshake Fallback
-
-The handshake provides a user-approved fallback when normal verification cannot be completed, such as when GitHub is unavailable.
-
-1. The server generates a handshake code and saves it in `config/synchronize/config.json` under `handshake`.
-2. The server owner privately shares the code with trusted players.
-3. Players enter it in the handshake field on Minecraft's **Add Server / Edit Server** screen.
-4. When the fallback is offered, players explicitly choose to reconnect using the handshake.
-
-The client and server must prove that they know the same code.
-
-> **REMEMBER!** A successful handshake does not prove that either JAR is an official GitHub release. Only use this fallback with a server owner you trust, and keep the code private.
-
-Preview of Editing Handshake Code:
-
-![Handshake Edit Preview](https://raw.githubusercontent.com/theptah/synchronize/refs/heads/main/preview-4.gif)
 
 ## Build Guide
 
